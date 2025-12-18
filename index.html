@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Neon Student Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg">
+  <div class="stars"></div>
+  <div class="glow-orb"></div>
+
+  <div class="auth-container">
+    <div class="brand">
+      <h1>Neon<span>Campus</span></h1>
+      <p>Futuristic student-teacher hub for 250 humans.</p>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="login">Login</button>
+      <button class="tab-btn" data-tab="signup">Sign up</button>
+    </div>
+
+
+    <!-- Login form -->
+    <div class="tab-content active" id="login-tab">
+      <form id="login-form">
+        <label>Role</label>
+        <select id="login-role">
+          <option value="student">Student</option>
+          <option value="teacher">Teacher</option>
+        </select>
+
+        <label>Roll no (student) / Email (both)</label>
+        <input type="text" id="login-identifier" placeholder="Roll Number OR Email Address" required>
+
+        <label>Password</label>
+        <input type="password" id="login-password" required>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Login</button>
+          <a href="#" id="forgot-password-link" class="small-link">Forgot password?</a>
+        </div>
+        <p class="hint">Students can login with Roll No or Email.</p>
+        <p id="login-error" class="error"></p>
+      </form>
+    </div>
+
+    <!-- Signup form -->
+    <div class="tab-content" id="signup-tab">
+      <form id="signup-form">
+        <label>Role</label>
+        <select id="signup-role">
+          <option value="student">Student</option>
+          <option value="teacher">Teacher</option>
+        </select>
+
+        <div class="two-col">
+          <div>
+            <label>Full name</label>
+            <input type="text" id="signup-name" required>
+          </div>
+          <div>
+            <label>Department / Branch</label>
+            <input type="text" id="signup-branch-dept" placeholder="CSE / ECE / BCA / Physics">
+          </div>
+        </div>
+
+        <label>Email (Required for account recovery)</label>
+        <input type="email" id="signup-email" placeholder="you@university.edu" required>
+
+        <div id="student-extra">
+          <div class="two-col">
+            <div>
+              <label>Roll number</label>
+              <input type="text" id="signup-roll" placeholder="25WU0801001">
+            </div>
+            <div>
+              <label>Year / Sem</label>
+              <input type="text" id="signup-year" placeholder="1st year / Sem 1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Teacher extra removed because email is now global -->
+
+        <label>Password</label>
+        <input type="password" id="signup-password" required>
+
+        <button type="submit" class="btn-primary">Create account</button>
+        <p class="hint">Please use a valid email for password recovery.</p>
+        <p id="signup-error" class="error"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div class="modal hidden" id="forgot-modal">
+    <div class="modal-content auth-modal-content">
+      <h3>Reset Password</h3>
+      <div id="forgot-step-1">
+        <p>Enter your registered email address. We will send you an OTP.</p>
+        <label>Email</label>
+        <input type="email" id="forgot-email">
+        <button id="btn-send-otp" class="btn-primary">Send OTP</button>
+      </div>
+
+      <div id="forgot-step-2" class="hidden">
+        <p>OTP sent! Check your email (or server console) and enter it below.</p>
+        <label>OTP Code</label>
+        <input type="text" id="forgot-otp" placeholder="6-digit code">
+        <label>New Password</label>
+        <input type="password" id="forgot-new-pass">
+        <button id="btn-reset-pass" class="btn-primary">Set New Password</button>
+      </div>
+
+      <button id="btn-close-forgot" class="btn-outline-small" style="margin-top:1rem;">Cancel</button>
+      <p id="forgot-message" class="hint"></p>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
