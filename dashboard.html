@@ -5,11 +5,12 @@
   <meta charset="UTF-8">
   <title>Dashboard | Neon Student Portal</title>
   <link rel="stylesheet" href="style.css">
+  <!-- FullCalendar CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
 </head>
 
 <body class="bg">
-  <div class="stars"></div>
-  <div class="glow-orb"></div>
+
 
   <header class="topbar">
     <div class="topbar-left">
@@ -88,10 +89,13 @@
           <h3>Exam Date Sheet</h3>
           <div class="view-actions">
             <select id="datesheets-course-select"></select>
-            <button id="btn-upload-datesheet" class="btn-primary-small teacher-only">Upload Date Sheet</button>
+            <button id="btn-upload-datesheet" class="btn-outline-small teacher-only">Upload PDF</button>
           </div>
         </div>
-        <div id="datesheets-list" class="grid"></div>
+        <!-- Calendar Container -->
+        <div id="calendar-container"></div>
+        <!-- PDF Date Sheets List -->
+        <div id="datesheets-list" class="grid" style="margin-top: 20px;"></div>
       </div>
 
       <!-- Course board -->
@@ -147,6 +151,12 @@
           <label>Profile photo URL (optional)</label>
           <input type="text" id="profile-photo">
 
+          <div id="teacher-expertise-group" class="teacher-only">
+            <label>Your Expertise (Visible to students)</label>
+            <textarea id="profile-expertise" rows="3"
+              style="width:100%; padding:0.5rem; background:#111; color:white; border:1px solid #333; border-radius:4px;"></textarea>
+          </div>
+
           <h4>Change password</h4>
           <div class="two-col">
             <div>
@@ -192,6 +202,9 @@
     </div>
   </div>
 
+  <script type="module" src="analytics.js"></script>
+  <!-- FullCalendar JS -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   <script src="script.js"></script>
 </body>
 
