@@ -294,12 +294,15 @@ function initForgotAndReset() {
         body: JSON.stringify({ email, otp, newPassword })
       });
       msg.style.color = "lightgreen";
-      msg.textContent = res.message;
+      msg.textContent = res.message + " You can now log in.";
+      document.getElementById("forgot-new-pass").value = "";
+      document.getElementById("forgot-otp").value = "";
       setTimeout(() => {
         modal.classList.add("hidden");
-        // Switch to login tab?
-        document.querySelector(".tab-btn[data-tab='login']").click();
-      }, 2000);
+        // Switch to login tab
+        const loginTabBtn = document.querySelector(".tab-btn[data-tab='login']");
+        if (loginTabBtn) loginTabBtn.click();
+      }, 3000);
     } catch (err) {
       msg.style.color = "var(--error)";
       msg.textContent = err.message;
@@ -331,6 +334,15 @@ function initDashboardPage() {
   logoutBtn.addEventListener("click", () => {
     clearSession();
     window.location.href = "index.html";
+  });
+
+  // Overview Card Navigation
+  document.querySelectorAll(".nav-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const target = card.dataset.target;
+      const navBtn = document.querySelector(`.nav-btn[data-view="${target}"]`);
+      if (navBtn) navBtn.click();
+    });
   });
 
   // Nav between views
@@ -388,59 +400,55 @@ async function loadDashboardSummary() {
     document.getElementById("stat-courses").textContent = data.myCoursesCount ?? "0";
 
     if (user.role === "student") {
-      document.getElementById("stat-pending").textContent =
-        data.pendingAssignmentsCount ?? "0";
+      // Calculate completed assignments
+      const myCourses = await api("/api/my-courses");
+      let completedCount = 0;
+      let allPending = [];
+
+      for (const c of myCourses) {
+        const assignments = await api(`/api/courses/${c.id}/assignments`);
+        assignments.forEach(a => {
+          const isSubmitted = a.submissions && a.submissions.some(s => s.studentId === user.id);
+          if (isSubmitted) {
+            completedCount++;
+          } else {
+            allPending.push({ ...a, courseName: c.name });
+          }
+        });
+      }
+
+      const statCompleted = document.getElementById("stat-completed");
+      if (statCompleted) statCompleted.textContent = completedCount;
 
       const extra = document.getElementById("overview-extra");
       extra.innerHTML = "";
 
-      // Grid for pending assignments + notifications
-      const container = document.createElement("div");
-      container.className = "two-col-grid"; // custom class we might need, or just grid
-      container.style.display = "grid";
-      container.style.gridTemplateColumns = "1fr 1fr";
-      container.style.gap = "1rem";
+      // Show Pending Assignments Section
+      const pendingSection = document.createElement("div");
+      pendingSection.style.marginTop = "2rem";
+      pendingSection.innerHTML = "<h3 class='overview-pending-header'>Pending Assignments</h3>";
 
-      // 1. Pending Assignments Column
-      const pendingCol = document.createElement("div");
-      pendingCol.innerHTML = "<h3>Pending</h3>";
-      if (data.pendingAssignments && data.pendingAssignments.length > 0) {
-        data.pendingAssignments.slice(0, 3).forEach((a) => {
+      if (allPending.length > 0) {
+        const grid = document.createElement("div");
+        grid.className = "grid";
+        allPending.forEach(a => {
           const card = document.createElement("div");
           card.className = "assignment-card";
           card.innerHTML = `
             <h4>${a.title}</h4>
-            <span class="small">Due: ${new Date(a.dueDate).toLocaleString()}</span>
+            <div class="small">${a.courseName}</div>
+            <div class="small">Due: ${new Date(a.dueDate).toLocaleString()}</div>
+            <div style="margin-top:auto; padding-top:1rem;">
+              <button class="btn-primary-small" onclick='openSubmitAssignmentModal(${JSON.stringify(a).replace(/'/g, "&apos;")})'>Submit Now</button>
+            </div>
           `;
-          pendingCol.appendChild(card);
+          grid.appendChild(card);
         });
+        pendingSection.appendChild(grid);
       } else {
-        pendingCol.innerHTML += "<p class='hint'>No pending assignments.</p>";
+        pendingSection.innerHTML += "<p class='hint'>No pending assignments. Great job!</p>";
       }
-      container.appendChild(pendingCol);
-
-      // 2. Notifications Column
-      const notifCol = document.createElement("div");
-      notifCol.innerHTML = "<h3>Notifications</h3>";
-      if (notifs && notifs.length > 0) {
-        notifs.forEach(n => {
-          const div = document.createElement("div");
-          div.className = "assignment-card";
-          // Condition: Notification turns red if type is warning
-          const color = n.type === "warning" ? "red" : "var(--accent-pink)";
-          div.style.borderLeft = `4px solid ${color}`;
-          div.innerHTML = `
-             <div class="small" style="color:${n.type === 'warning' ? 'red' : 'var(--text-bright)'}; font-weight:${n.type === 'warning' ? 'bold' : 'normal'}">${n.message}</div>
-             <div class="small" style="opacity:0.6; font-size:0.75rem;">${new Date(n.createdAt).toLocaleDateString()}</div>
-           `;
-          notifCol.appendChild(div);
-        });
-      } else {
-        notifCol.innerHTML += "<p class='hint'>No new notifications.</p>";
-      }
-      container.appendChild(notifCol);
-
-      extra.appendChild(container);
+      extra.appendChild(pendingSection);
 
     } else {
       const leftToGrade = data.submissionsToGradeCount ?? 0;
@@ -546,18 +554,18 @@ async function loadCourses() {
 
 function createCourseCard(c, isJoined, isStudent) {
   const card = document.createElement("div");
-  card.className = "card";
+  card.className = "course-card";
   card.innerHTML = `
     <h4>${c.name}</h4>
-    <div class="small" style="color:var(--text-dim); margin-bottom:0.1rem;">${c.code}</div>
-    <div class="small" style="color:var(--accent-cyan); font-weight:bold;">${c.teacherRank || ""} ${c.teacherName || ""}</div>
-    <div class="small">${c.description || "No description"}</div>
+    <div class="small" style="color:var(--text-dim); margin-bottom:0.1rem; font-size: 1.1rem;">${c.code}</div>
+    <div class="small" style="color:#00ffff; font-weight:bold; font-size: 1.3rem; margin: 8px 0;">${c.teacherRank || ""} ${c.teacherName || ""}</div>
+    <div class="small" style="font-size: 1.15rem; line-height: 1.4;">${c.description || "No description"}</div>
     ${c.instructorExpertise ? `
-    <div class="small" style="margin-top:10px; padding:5px; background:rgba(255,255,255,0.05); border-radius:4px;">
-      <strong>Professor Expertise:</strong><br>
+    <div class="small" style="margin-top:15px; padding:12px; background:rgba(255,255,255,0.05); border-radius:8px; font-size: 1.1rem;">
+      <strong style="color: #4c8dff;">Professor Expertise:</strong><br>
       ${c.instructorExpertise}
     </div>` : ""}
-    <div style="margin-top:auto; padding-top:1rem;">
+    <div style="margin-top:auto; padding-top:1.5rem;">
        ${getActionButtons(c, isJoined, isStudent)}
     </div>
   `;
@@ -782,19 +790,38 @@ async function deleteCourse(courseId) {
 // Assignments
 let cachedAssignments = [];
 
+let selectedAssignmentCourseId = null;
+
 async function loadAssignments() {
   try {
-    // We need assignments course-wise; easiest: for each course we load separately
     const myCourses = await api("/api/my-courses");
-    const all = [];
-    for (const c of myCourses) {
-      const assignments = await api(`/api/courses/${c.id}/assignments`);
-      assignments.forEach((a) => {
-        all.push({ ...a, course: c });
-      });
+    const sidebar = document.getElementById("subjects-list-sidebar");
+    sidebar.innerHTML = "";
+
+    myCourses.forEach(c => {
+      const block = document.createElement("div");
+      block.className = "course-block";
+      if (c.id === selectedAssignmentCourseId) block.classList.add("active");
+      block.textContent = c.name;
+      block.onclick = () => {
+        selectedAssignmentCourseId = c.id;
+        loadAssignments(); // Re-render sidebar and list
+      };
+      sidebar.appendChild(block);
+    });
+
+    if (!selectedAssignmentCourseId && myCourses.length > 0) {
+      selectedAssignmentCourseId = myCourses[0].id;
+      loadAssignments();
+      return;
     }
-    cachedAssignments = all;
-    renderAssignments();
+
+    if (selectedAssignmentCourseId) {
+      const assignments = await api(`/api/courses/${selectedAssignmentCourseId}/assignments`);
+      const course = myCourses.find(c => c.id === selectedAssignmentCourseId);
+      cachedAssignments = assignments.map(a => ({ ...a, course }));
+      renderAssignments();
+    }
   } catch (err) {
     console.error("Assignments error:", err);
   }
@@ -804,111 +831,173 @@ function renderAssignments() {
   const container = document.getElementById("assignments-list");
   const user = getUser();
   container.innerHTML = "";
-  cachedAssignments.forEach((a) => {
-    const card = document.createElement("div");
-    card.className = "assignment-card";
 
-    // Attachments Links
-    let attachmentsHtml = "";
-    if (a.attachments && a.attachments.length > 0) {
-      attachmentsHtml = `<div class="small" style="margin-top:0.5rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:0.5rem;">
-         <strong>Instructions / Files:</strong><br>
-         ${a.attachments.map(f => `<a href="${f.url}" target="_blank" style="color:var(--accent-cyan);margin-right:10px;">📄 ${f.originalName}</a>`).join("")}
-       </div>`;
-    }
+  if (cachedAssignments.length === 0) {
+    container.innerHTML = "<p class='hint' style='font-size: 1.2rem;'>No assignments for this subject.</p>";
+    return;
+  }
 
-    const timeRemaining = new Date(a.dueDate) - new Date();
-    const requiredMs = (a.requiredTime || 0) * 3600000;
-    let timeColor = "inherit";
-    if (timeRemaining > 0 && timeRemaining <= 2 * requiredMs) {
-      timeColor = "red";
-    }
-
-    card.innerHTML = `
-        <h4 style="color:${timeColor}">${a.title}</h4>
-        <div class="small">${a.course.name} (${a.course.code})</div>
-        <div class="small">Due: ${new Date(a.dueDate).toLocaleString()}</div>
-        ${a.requiredTime ? `<div class="small" style="color:${timeColor}">Estimated effort: ${a.requiredTime} hours</div>` : ""}
-        <div class="small">Max marks: ${a.maxMarks}</div>
-        <div class="small">${a.description || ""}</div>
-        ${attachmentsHtml}
-        <div class="small" id="assignment-actions-${a.id}" style="margin-top:1rem;"></div>
-      `;
-    container.appendChild(card);
-
-    const actions = card.querySelector(`#assignment-actions-${a.id}`);
-    if (user.role === "student") {
-      const mySub = a.submissions ? a.submissions.find(s => s.studentId === user.id) : null;
-
-      const statusDiv = document.createElement("div");
-      statusDiv.style.marginBottom = "0.5rem";
-
-      if (mySub) {
-        statusDiv.innerHTML = `<span style="color:var(--accent-cyan)">✓ Submitted</span> <span class="small">(${new Date(mySub.submittedAt).toLocaleDateString()})</span>`;
-
-        // Render Submitted Files
-        if (mySub.files && mySub.files.length > 0) {
-          const filesDiv = document.createElement("div");
-          filesDiv.style.marginTop = "0.5rem";
-          const isDeletable = (new Date() - new Date(mySub.submittedAt)) < 5 * 60 * 1000; // 5 mins
-
-          mySub.files.forEach(f => {
-            const fRow = document.createElement("div");
-            fRow.className = "small";
-            fRow.style.marginBottom = "4px";
-            fRow.innerHTML = `<a href="${f.url}" target="_blank" style="margin-right:10px;">📄 ${f.originalName}</a>`;
-
-            if (isDeletable && f._id) {
-              const delBtn = document.createElement("button");
-              delBtn.textContent = "Delete";
-              delBtn.className = "btn-outline-small";
-              delBtn.style.color = "red";
-              delBtn.style.padding = "2px 6px";
-              delBtn.style.fontSize = "0.7rem";
-              delBtn.onclick = async () => {
-                if (!confirm("Delete this file?")) return;
-                try {
-                  await api(`${API_BASE}/api/assignments/${a.id}/submission/files/${f._id}`, { method: "DELETE" });
-                  loadAssignments(); // Reload to reflect changes
-                } catch (e) {
-                  alert(e.message);
-                }
-              };
-              fRow.appendChild(delBtn);
-            }
-            filesDiv.appendChild(fRow);
-          });
-          statusDiv.appendChild(filesDiv);
-        }
-
-        if (mySub.marks !== null && mySub.marks !== undefined) {
-          statusDiv.innerHTML += `
-            <div style="margin-top:4px; font-weight:bold; color:var(--accent-pink);">
-              Score: ${mySub.marks} / ${a.maxMarks}
-            </div>
-            ${mySub.feedback ? `<div class="small">Feedback: ${mySub.feedback}</div>` : ""}
-          `;
-        } else {
-          statusDiv.innerHTML += `<div class="small" style="opacity:0.7;">(Not graded yet)</div>`;
-        }
-      } else {
-        statusDiv.innerHTML = `<span style="color:orange">Pending</span>`;
-      }
-      actions.appendChild(statusDiv);
-
-      const btn = document.createElement("button");
-      btn.className = "btn-primary-small";
-      btn.textContent = mySub ? "Add more files" : "Submit / Add files";
-      btn.addEventListener("click", () => openSubmitAssignmentModal(a));
-      actions.appendChild(btn);
-    } else {
-      const viewBtn = document.createElement("button");
-      viewBtn.className = "btn-outline-small";
-      viewBtn.textContent = "View submissions";
-      viewBtn.addEventListener("click", () => openGradeModal(a));
-      actions.appendChild(viewBtn);
-    }
+  const pendingList = cachedAssignments.filter(a => {
+    const isSubmitted = a.submissions && a.submissions.some(s => s.studentId === user.id);
+    return !isSubmitted;
   });
+  const submittedList = cachedAssignments.filter(a => {
+    const isSubmitted = a.submissions && a.submissions.some(s => s.studentId === user.id);
+    return isSubmitted;
+  });
+
+  const mainWrapper = document.createElement("div");
+  mainWrapper.style.width = "100%";
+
+  // Pending Box
+  const pendingBox = document.createElement("div");
+  pendingBox.className = "assignment-section-box";
+  pendingBox.innerHTML = `<h3 style="font-size: 1.5rem; color: orange; margin-bottom: 1rem;">Pending Assignments</h3>`;
+  const pendingGrid = document.createElement("div");
+  pendingGrid.className = "grid";
+
+  if (pendingList.length === 0) {
+    pendingGrid.innerHTML = "<p class='hint' style='font-size: 1.1rem; padding: 1rem;'>Excellent! No pending assignments.</p>";
+  } else {
+    pendingList.forEach(a => {
+      const card = createAssignmentCard(a, user, false);
+      pendingGrid.appendChild(card);
+    });
+  }
+  pendingBox.appendChild(pendingGrid);
+  mainWrapper.appendChild(pendingBox);
+
+  // Submitted Box
+  const submittedBox = document.createElement("div");
+  submittedBox.className = "assignment-section-box";
+  submittedBox.style.marginTop = "2rem";
+  submittedBox.innerHTML = `<h3 style="font-size: 1.5rem; color: #22c55e; margin-bottom: 1rem;">Submitted Assignments</h3>`;
+  const submittedGrid = document.createElement("div");
+  submittedGrid.className = "grid";
+
+  if (submittedList.length === 0) {
+    submittedGrid.innerHTML = "<p class='hint' style='font-size: 1.1rem; padding: 1rem;'>You haven't submitted any assignments yet.</p>";
+  } else {
+    submittedList.forEach(a => {
+      const card = createAssignmentCard(a, user, true);
+      submittedGrid.appendChild(card);
+    });
+  }
+  submittedBox.appendChild(submittedGrid);
+  mainWrapper.appendChild(submittedBox);
+
+  container.appendChild(mainWrapper);
+}
+
+function createAssignmentCard(a, user, isSubmitted) {
+  const card = document.createElement("div");
+  card.className = "assignment-card large-card";
+
+  // Attachments Links
+  let attachmentsHtml = "";
+  if (a.attachments && a.attachments.length > 0) {
+    attachmentsHtml = `<div class="small" style="margin-top:0.5rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:0.5rem; font-size: 0.9rem;">
+       <strong>Instructions / Files:</strong><br>
+       ${a.attachments.map(f => `<a href="${f.url}" target="_blank" style="color:var(--accent-cyan);margin-right:10px;">📄 ${f.originalName}</a>`).join("")}
+     </div>`;
+  }
+
+  const timeRemaining = new Date(a.dueDate) - new Date();
+  const requiredMs = (a.requiredTime || 0) * 3600000;
+  let timeColor = "inherit";
+  if (timeRemaining > 0 && timeRemaining <= 2 * requiredMs) {
+    timeColor = "red";
+  }
+
+  const tickHtml = isSubmitted ? `<span style="color:#22c55e; margin-left:10px;" title="Submitted">✔</span>` : "";
+
+  card.innerHTML = `
+      <h4 style="color:${timeColor}; font-size: 1.3rem;">${a.title} ${tickHtml}</h4>
+      <div class="small" style="font-size: 1rem;">${a.course.name} (${a.course.code})</div>
+      <div class="small" style="font-size: 1rem;">Due: ${new Date(a.dueDate).toLocaleString()}</div>
+      ${a.requiredTime ? `<div class="small" style="color:${timeColor}; font-size: 0.9rem;">Estimated effort: ${a.requiredTime} hours</div>` : ""}
+      <div class="small" style="font-size: 1rem;">Max marks: ${a.maxMarks}</div>
+      <div class="small" style="font-size: 0.95rem; margin-top: 5px;">${a.description || ""}</div>
+      ${attachmentsHtml}
+      <div class="small" id="assignment-actions-${a.id}" style="margin-top:1rem;"></div>
+    `;
+
+  const actions = card.querySelector(`#assignment-actions-${a.id}`);
+  if (user.role === "student") {
+    const mySub = a.submissions ? a.submissions.find(s => s.studentId === user.id) : null;
+
+    const statusDiv = document.createElement("div");
+    statusDiv.style.marginBottom = "0.5rem";
+
+    if (mySub) {
+      statusDiv.innerHTML = `<span style="color:var(--accent-cyan); font-size: 1rem;">✓ Submitted</span> <span class="small" style="font-size: 0.9rem;">(${new Date(mySub.submittedAt).toLocaleDateString()})</span>`;
+
+      // Render Submitted Files
+      if (mySub.files && mySub.files.length > 0) {
+        const filesDiv = document.createElement("div");
+        filesDiv.style.marginTop = "0.5rem";
+        const isDeletable = (new Date() - new Date(mySub.submittedAt)) < 5 * 60 * 1000;
+
+        mySub.files.forEach(f => {
+          const fRow = document.createElement("div");
+          fRow.className = "small";
+          fRow.style.marginBottom = "4px";
+          fRow.style.fontSize = "0.9rem";
+          fRow.innerHTML = `<a href="${f.url}" target="_blank" style="margin-right:10px;">📄 ${f.originalName}</a>`;
+
+          if (isDeletable && f._id) {
+            const delBtn = document.createElement("button");
+            delBtn.textContent = "Delete";
+            delBtn.className = "btn-outline-small";
+            delBtn.style.color = "red";
+            delBtn.style.padding = "2px 6px";
+            delBtn.style.fontSize = "0.7rem";
+            delBtn.onclick = async () => {
+              if (!confirm("Delete this file?")) return;
+              try {
+                await api(`${API_BASE}/api/assignments/${a.id}/submission/files/${f._id}`, { method: "DELETE" });
+                loadAssignments();
+              } catch (e) {
+                alert(e.message);
+              }
+            };
+            fRow.appendChild(delBtn);
+          }
+          filesDiv.appendChild(fRow);
+        });
+        statusDiv.appendChild(filesDiv);
+      }
+
+      if (mySub.marks !== null && mySub.marks !== undefined) {
+        statusDiv.innerHTML += `
+          <div style="margin-top:4px; font-weight:bold; color:var(--accent-pink); font-size: 1.1rem;">
+            Score: ${mySub.marks} / ${a.maxMarks}
+          </div>
+          ${mySub.feedback ? `<div class="small" style="font-size: 0.95rem;">Feedback: ${mySub.feedback}</div>` : ""}
+        `;
+      } else {
+        statusDiv.innerHTML += `<div class="small" style="opacity:0.7; font-size: 0.9rem;">(Not graded yet)</div>`;
+      }
+    } else {
+      statusDiv.innerHTML = `<span style="color:orange; font-size: 1rem;">Pending</span>`;
+    }
+    actions.appendChild(statusDiv);
+
+    const btn = document.createElement("button");
+    btn.className = "btn-primary-small";
+    btn.style.fontSize = "0.9rem";
+    btn.textContent = mySub ? "Add more files" : "Submit / Add files";
+    btn.addEventListener("click", () => openSubmitAssignmentModal(a));
+    actions.appendChild(btn);
+  } else {
+    const viewBtn = document.createElement("button");
+    viewBtn.className = "btn-outline-small";
+    viewBtn.style.fontSize = "0.9rem";
+    viewBtn.textContent = "View submissions";
+    viewBtn.addEventListener("click", () => openGradeModal(a));
+    actions.appendChild(viewBtn);
+  }
+  return card;
 }
 
 function initAssignmentsSection(user) {
@@ -1084,8 +1173,13 @@ function openGradeModal(assignment) {
           )
           .join("<br>");
         div.innerHTML = `
-          <div class="small">
-            <strong>${s.studentName}</strong> (${s.rollNumber || "roll?"})
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
+            <div style="width: 35px; height: 35px; border-radius: 50%; overflow: hidden; background: #222; border: 1px solid var(--accent-cyan);">
+              <img src="/api/users/${s.studentId}/avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(s.studentName)}'">
+            </div>
+            <div class="small">
+              <strong>${s.studentName}</strong> (${s.rollNumber || "roll?"})
+            </div>
           </div>
           <div class="small">Submitted: ${new Date(
           s.submittedAt
@@ -1145,32 +1239,93 @@ function openGradeModal(assignment) {
 }
 
 // Messages
+let activeChatCourseId = null;
+let staticCourseOrder = null;
+
 async function initMessagesView() {
-  const select = document.getElementById("messages-course-select");
+  const sidebar = document.getElementById("chat-sidebar");
   const container = document.getElementById("messages-container");
   const form = document.getElementById("message-form");
-  if (!select || !container || !form) return;
+  if (!sidebar || !container || !form) return;
 
-  delete container.dataset.lastData; // Ensure fresh load on tab entry
+  delete container.dataset.lastData;
 
   const myCourses = await api("/api/my-courses");
-  select.innerHTML = myCourses
-    .map((c) => `<option value="${c.id}">${c.name} (${c.code})</option>`)
-    .join("");
+  if (!staticCourseOrder) {
+    staticCourseOrder = myCourses.map(c => c.id);
+  }
+
+  async function renderSidebar() {
+    const coursesWithExtra = [];
+    for (const c of myCourses) {
+      const msgs = await api(`/api/courses/${c.id}/messages`);
+      const lastMsg = msgs.length > 0 ? msgs[0] : null;
+      const seenCount = parseInt(localStorage.getItem(`seenMsgs_${c.id}`) || "0");
+      const isUnread = msgs.length > seenCount;
+      coursesWithExtra.push({ ...c, lastMsg, isUnread, msgCount: msgs.length });
+    }
+
+    // Sort: If isUnread AND not active, move to top. Otherwise follow static order.
+    coursesWithExtra.sort((a, b) => {
+      const aIsUnreadMoving = a.isUnread && a.id !== activeChatCourseId;
+      const bIsUnreadMoving = b.isUnread && b.id !== activeChatCourseId;
+
+      if (aIsUnreadMoving && !bIsUnreadMoving) return -1;
+      if (!aIsUnreadMoving && bIsUnreadMoving) return 1;
+
+      // Both are either not moving or both are unread (rare case both move)
+      // Follow static order
+      return staticCourseOrder.indexOf(a.id) - staticCourseOrder.indexOf(b.id);
+    });
+
+    sidebar.innerHTML = "";
+    coursesWithExtra.forEach(c => {
+      const block = document.createElement("div");
+      block.className = "chat-block";
+      if (c.id === activeChatCourseId) block.classList.add("active");
+      if (c.isUnread && c.id !== activeChatCourseId) block.classList.add("unread");
+
+      block.innerHTML = `
+        <h4>${c.name}</h4>
+        <div class="last-msg">${c.lastMsg ? c.lastMsg.content : "No messages yet"}</div>
+      `;
+
+      block.onclick = () => {
+        activeChatCourseId = c.id;
+        // Mark as seen immediately
+        const courseData = coursesWithExtra.find(cx => cx.id === c.id);
+        if (courseData) {
+          localStorage.setItem(`seenMsgs_${c.id}`, courseData.msgCount);
+        }
+        renderSidebar();
+        loadMessages();
+      };
+      sidebar.appendChild(block);
+    });
+
+    if (!activeChatCourseId && myCourses.length > 0) {
+      activeChatCourseId = staticCourseOrder[0];
+      const firstCourse = coursesWithExtra.find(cx => cx.id === activeChatCourseId);
+      if (firstCourse) {
+        localStorage.setItem(`seenMsgs_${activeChatCourseId}`, firstCourse.msgCount);
+      }
+      renderSidebar();
+      loadMessages();
+    }
+  }
 
   async function loadMessages() {
-    const courseId = select.value;
-    // container.innerHTML = ""; // Removed to prevent blinking
-    if (!courseId) return;
+    if (!activeChatCourseId) return;
     try {
-      const messages = await api(`/api/courses/${courseId}/messages`);
+      const messages = await api(`/api/courses/${activeChatCourseId}/messages`);
 
-      // Smart update: only render if data changed
+      // Update seen count if active
+      localStorage.setItem(`seenMsgs_${activeChatCourseId}`, messages.length);
+
       const dataStr = JSON.stringify(messages);
       if (container.dataset.lastData === dataStr) return;
       container.dataset.lastData = dataStr;
 
-      // Reverse messages so newest appear at bottom
       const reversedMessages = [...messages].reverse();
 
       const newHtml = reversedMessages.length === 0
@@ -1185,55 +1340,51 @@ async function initMessagesView() {
         `).join("");
 
       container.innerHTML = newHtml;
-
-      // Auto-scroll to bottom to show newest messages
       container.scrollTop = container.scrollHeight;
+
+      // Also refresh sidebar highlights occasionally
+      // renderSidebar(); // Avoid infinite loop, maybe call it every few polls
     } catch (err) {
-      // console.error("Message polling error:", err); // Silent fail on poll? Or show error?
-      // If we show error, it might replace good content. Let's show it if it persists?
-      // For now, simple logging to console to avoid disrupting UI flow on transient network blips.
       console.warn("Message poll error:", err.message);
     }
   }
 
-  // Bind listeners ONLY if not initialized
-  if (!container.dataset.initialized) {
-    select.addEventListener("change", () => {
-      // On manual switch, show loading and reset cache
-      container.innerHTML = "<p class='hint'>Loading...</p>";
-      delete container.dataset.lastData;
+  if (!sidebar.dataset.initialized) {
+    document.getElementById("btn-refresh-courses")?.addEventListener("click", () => {
+      renderSidebar();
       loadMessages();
     });
-    document.getElementById("btn-refresh-courses")?.addEventListener("click", loadMessages);
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const input = document.getElementById("message-input");
       const content = input.value.trim();
-      if (!content) return;
+      if (!content || !activeChatCourseId) return;
 
-      const courseId = select.value;
       try {
-        await api(`/api/courses/${courseId}/messages`, {
+        await api(`/api/courses/${activeChatCourseId}/messages`, {
           method: "POST",
           body: JSON.stringify({ content })
         });
         input.value = "";
         loadMessages();
+        renderSidebar();
       } catch (err) {
         alert("Error: " + err.message);
       }
     });
 
-    container.dataset.initialized = "true";
+    sidebar.dataset.initialized = "true";
   }
 
-  // Initial load
-  await loadMessages();
+  await renderSidebar();
 
-  // Start Auto-Refresh (3 seconds)
   if (messageInterval) clearInterval(messageInterval);
-  messageInterval = setInterval(loadMessages, 3000);
+  messageInterval = setInterval(() => {
+    loadMessages();
+    // Refresh sidebar every 10 seconds to show unread badges from other courses
+    if (Date.now() % 10000 < 3000) renderSidebar();
+  }, 3000);
 }
 
 // Profile
@@ -1247,7 +1398,19 @@ async function loadProfile() {
       data.role === "student" ? data.branch || "" : data.department || "";
     document.getElementById("profile-year").value = data.year || "";
     document.getElementById("profile-email").value = data.email || "";
-    document.getElementById("profile-photo").value = data.profilePhotoUrl || "";
+
+    // Update Photo Preview
+    const imgPreview = document.getElementById("profile-img-preview");
+    const initials = document.getElementById("profile-initials");
+    if (data.profilePhotoUrl) {
+      imgPreview.src = data.profilePhotoUrl;
+      imgPreview.style.display = "block";
+      initials.style.display = "none";
+    } else {
+      imgPreview.style.display = "none";
+      initials.style.display = "block";
+      initials.textContent = data.name ? data.name.charAt(0).toUpperCase() : "?";
+    }
   } catch (err) {
     console.error("Profile load error:", err);
   }
@@ -1258,6 +1421,29 @@ function initProfileSection(user) {
   const message = document.getElementById("profile-message");
   if (!form) return;
 
+  const photoInput = document.getElementById("profile-photo-input");
+  photoInput?.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("photo", file);
+
+    try {
+      message.textContent = "Uploading photo...";
+      const res = await fetch(`${API_BASE}/api/me/photo`, {
+        method: "POST",
+        headers: { Authorization: "Bearer " + getToken() },
+        body: formData
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      message.textContent = "Photo updated successfully.";
+      loadProfile();
+    } catch (err) {
+      message.textContent = "Photo upload error: " + err.message;
+    }
+  });
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     message.textContent = "";
@@ -1265,12 +1451,11 @@ function initProfileSection(user) {
     const name = document.getElementById("profile-name").value.trim();
     const branchDept = document.getElementById("profile-branch-dept").value.trim();
     const year = document.getElementById("profile-year").value.trim();
-    const profilePhotoUrl = document.getElementById("profile-photo").value.trim();
     const expertise = document.getElementById("profile-expertise")?.value.trim() || "";
     const currentPassword = document.getElementById("profile-current-password").value;
     const newPassword = document.getElementById("profile-new-password").value;
 
-    const payload = { name, profilePhotoUrl, expertise };
+    const payload = { name, expertise };
 
     if (user.role === "student") {
       payload.branch = branchDept;
@@ -1300,50 +1485,100 @@ function initProfileSection(user) {
 }
 
 async function initMaterialsView() {
-  const courseSelect = document.getElementById("materials-course-select");
+  const sidebarContainer = document.getElementById("materials-courses-sidebar");
   const materialsList = document.getElementById("materials-list");
   const uploadBtn = document.getElementById("btn-upload-material");
   const user = getUser();
 
+  let selectedCourseId = null;
+
   // Load user courses
   const myCourses = await api("/api/my-courses");
-  courseSelect.innerHTML = myCourses
-    .map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`)
-    .join("");
+
+  function renderSidebar() {
+    sidebarContainer.innerHTML = "";
+    myCourses.forEach(c => {
+      const block = document.createElement("div");
+      block.className = "course-block";
+      block.style.marginBottom = "10px";
+      block.style.display = "block";
+      block.style.textAlign = "left";
+      if (c.id === selectedCourseId) block.classList.add("active");
+      block.textContent = c.name;
+      block.onclick = () => {
+        selectedCourseId = c.id;
+        renderSidebar();
+        loadMaterials();
+      };
+      sidebarContainer.appendChild(block);
+    });
+
+    if (!selectedCourseId && myCourses.length > 0) {
+      selectedCourseId = myCourses[0].id;
+      renderSidebar();
+      loadMaterials();
+    }
+  }
 
   async function loadMaterials() {
-    const courseId = courseSelect.value;
+    if (!selectedCourseId) {
+      materialsList.innerHTML = "<p class='hint' style='font-size: 1.25rem;'>Please select a course to view study materials.</p>";
+      return;
+    }
     const coursesDb = await api("/api/courses");
-    const course = coursesDb.find(c => c.id === courseId);
+    const course = coursesDb.find(c => c.id === selectedCourseId);
 
     materialsList.innerHTML = "";
 
     if (!course || !course.materials || course.materials.length === 0) {
-      materialsList.innerHTML = "<p class='hint'>No study material uploaded yet.</p>";
+      materialsList.innerHTML = "<p class='hint' style='font-size: 1.25rem; padding: 20px;'>No study material uploaded yet for this subject.</p>";
       return;
     }
 
     course.materials.forEach(m => {
       const card = document.createElement("div");
-      card.className = "assignment-card";
+      card.className = "assignment-card large-card";
 
       let deleteBtn = "";
       if (user.role === "teacher") {
-        deleteBtn = `<button class="btn-outline-small delete-mat-btn" style="color:red; margin-left:10px;">Delete</button>`;
+        deleteBtn = `<button class="btn-outline-small delete-mat-btn" style="color:red; margin-left:10px; font-size: 1rem;">Delete</button>`;
       }
 
       card.innerHTML = `
-        <h4>${m.originalName}</h4>
-        <div style="margin-bottom:5px;">
+        <h4 style="font-size: 1.3rem; margin-bottom: 10px;">${m.originalName}</h4>
+        <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center;">
           ${m.fileType === 'video' ? `
-            <a class="small" href="${m.url}" target="_blank" style="color:var(--accent-cyan); font-weight:bold;">[ Watch Video ]</a>
+            <a class="btn-primary-small material-action-btn" href="${m.url}" target="_blank" style="color:white; font-weight:bold; text-decoration: none;">Watch Video</a>
           ` : `
-            <a class="small" href="${m.url}" target="_blank" style="margin-right:10px;">[ View ]</a>
-            <a class="small" href="${m.url}" download target="_blank">[ Download ]</a>
+            <a class="btn-outline-small material-action-btn" href="${m.url}" target="_blank" style="text-decoration: none;">View Online</a>
+            <button class="btn-primary-small material-action-btn download-btn" data-url="${m.url}" data-name="${m.originalName}">Download File</button>
           `}
         </div>
         ${deleteBtn}
       `;
+
+      // Fix Download logic
+      const dBtn = card.querySelector(".download-btn");
+      if (dBtn) {
+        dBtn.onclick = async (e) => {
+          e.preventDefault();
+          const url = dBtn.dataset.url;
+          const name = dBtn.dataset.name;
+          try {
+            const resp = await fetch(url);
+            const blob = await resp.blob();
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } catch (err) {
+            console.error("Download failed:", err);
+            window.open(url, '_blank');
+          }
+        };
+      }
 
       if (user.role === "teacher") {
         const btn = card.querySelector(".delete-mat-btn");
@@ -1364,10 +1599,10 @@ async function initMaterialsView() {
     });
   }
 
-  courseSelect.addEventListener("change", loadMaterials);
-  loadMaterials();
+  renderSidebar();
+  // loadMaterials() is called inside renderCourseRow if initial selection happens
 
-  if (user.role === "teacher") {
+  if (user.role === "teacher" && uploadBtn) {
     uploadBtn.onclick = () => {
       openModal("Upload Material or Video", (body, close) => {
         body.innerHTML = `
