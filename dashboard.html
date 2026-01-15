@@ -33,7 +33,7 @@
       <button class="nav-btn" data-view="profile">Profile</button>
       <button class="nav-btn" data-view="datesheets">Exam Date Sheet</button>
       <button class="nav-btn" data-view="schedule">Class Schedule</button>
-      <button class="nav-btn" data-view="broadcast">Leadership Broadcast</button>
+      <button class="nav-btn" data-view="broadcast">HOD and PD messages</button>
     </aside>
 
     <section class="content">
@@ -221,7 +221,8 @@
             </div>
           </div>
           <div class="schedule-container" style="display: flex; gap: 20px;">
-            <div id="class-calendar" style="flex: 3; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+            <div id="class-calendar"
+              style="flex: 3; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; min-height: 600px;">
             </div>
             <div class="holiday-box"
               style="flex: 1; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border-left: 3px solid var(--accent-pink);">
@@ -231,10 +232,10 @@
           </div>
         </div>
 
-        <!-- Leadership Broadcast -->
+        <!-- HOD and PD messages -->
         <div class="view" id="view-broadcast">
           <div class="view-header">
-            <h3>Leadership Broadcast</h3>
+            <h3>HOD and PD messages</h3>
             <p class="hint">Important announcements from HOD and Program Directors</p>
           </div>
           <div class="chat-container broadcast-chat">
