@@ -48,15 +48,26 @@ async function api(path, options = {}) {
   if (token) {
     headers["Authorization"] = "Bearer " + token;
   }
-  const res = await fetch(API_BASE + path, {
-    ...options,
-    headers
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || "Request failed");
+  try {
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers
+    });
+    if (res.status === 401) {
+      console.warn("Unauthorized! Clearing session and redirecting...");
+      clearSession();
+      window.location.href = "index.html";
+      return {};
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || "Request failed");
+    }
+    return res.json().catch(() => ({}));
+  } catch (err) {
+    console.error(`API Error [${path}]:`, err.message);
+    throw err;
   }
-  return res.json().catch(() => ({}));
 }
 
 // Simple routing: check which page we are on
@@ -375,11 +386,17 @@ function initDashboardPage() {
   });
 
   // Initial loads
-  loadDashboardSummary();
-  loadCourses();
-  loadAssignments();
-  initMessagesView();
-  loadProfile();
+  const safeLoad = async (fn, name) => {
+    try { await fn(); } catch (e) { console.error(`Failed to load ${name}:`, e.message); }
+  };
+
+  safeLoad(loadDashboardSummary, "Summary");
+  safeLoad(loadCourses, "Courses");
+  safeLoad(loadAssignments, "Assignments");
+  safeLoad(initMessagesView, "Messages");
+  safeLoad(loadProfile, "Profile");
+  safeLoad(initDateSheetView, "Date Sheet");
+  safeLoad(initMaterialsView, "Study Materials");
 
   initCoursesSection(user);
   initAssignmentsSection(user);
@@ -1279,6 +1296,9 @@ async function initMessagesView() {
     });
 
     sidebar.innerHTML = "";
+    if (coursesWithExtra.length === 0) {
+      sidebar.innerHTML = "<p class='hint' style='padding:10px;'>You are not enrolled in any courses.</p>";
+    }
     coursesWithExtra.forEach(c => {
       const block = document.createElement("div");
       block.className = "chat-block";
@@ -1497,6 +1517,9 @@ async function initMaterialsView() {
 
   function renderSidebar() {
     sidebarContainer.innerHTML = "";
+    if (myCourses.length === 0) {
+      sidebarContainer.innerHTML = "<p class='hint' style='padding:10px;'>No subjects available.</p>";
+    }
     myCourses.forEach(c => {
       const block = document.createElement("div");
       block.className = "course-block";
@@ -1638,7 +1661,7 @@ async function initMaterialsView() {
 
         return async () => {
           const type = typeSelect.value;
-          const courseId = courseSelect.value;
+          const courseId = selectedCourseId;
           const token = getToken();
 
           if (type === "video") {
@@ -1779,41 +1802,57 @@ async function initDateSheetView() {
       .join("");
 
   // Initialize FullCalendar
-  if (calendarContainer && typeof FullCalendar !== 'undefined') {
-    if (calendar) {
-      calendar.destroy();
-    }
+  if (calendarContainer) {
+    if (typeof FullCalendar === 'undefined') {
+      calendarContainer.innerHTML = "<p class='error' style='padding:20px;'>FullCalendar library failed to load. Please check your internet connection and refresh.</p>";
+    } else {
+      if (calendar) {
+        calendar.destroy();
+      }
 
-    calendar = new FullCalendar.Calendar(calendarContainer, {
-      initialView: 'dayGridMonth',
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,timeGridWeek'
-      },
-      editable: user.role === 'teacher',
-      selectable: user.role === 'teacher',
-      selectMirror: true,
-      dayMaxEvents: true,
-      events: async function (info, successCallback, failureCallback) {
-        try {
-          let events = [];
-          const courseId = courseSelect.value;
+      calendar = new FullCalendar.Calendar(calendarContainer, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek'
+        },
+        editable: user.role === 'teacher',
+        selectable: user.role === 'teacher',
+        selectMirror: true,
+        dayMaxEvents: true,
+        events: async function (info, successCallback, failureCallback) {
+          try {
+            let events = [];
+            const courseId = courseSelect.value;
 
-          if (user.role === 'student') {
-            const schedule = await api("/api/student/exam-schedule");
-            events = schedule.map(s => ({
-              id: s.courseId,
-              title: `${s.courseName}`,
-              start: s.examDate,
-              extendedProps: { courseCode: s.courseCode, time: s.examTime },
-              backgroundColor: '#38BDF8',
-              borderColor: '#6366F1'
-            }));
-          } else {
-            if (courseId === 'all') {
-              for (const course of myCourses) {
-                if (course.examDate && course.examTime) {
+            if (user.role === 'student') {
+              const schedule = await api("/api/student/exam-schedule");
+              events = schedule.map(s => ({
+                id: s.courseId,
+                title: `${s.courseName}`,
+                start: s.examDate,
+                extendedProps: { courseCode: s.courseCode, time: s.examTime },
+                backgroundColor: '#38BDF8',
+                borderColor: '#6366F1'
+              }));
+            } else {
+              if (courseId === 'all') {
+                for (const course of myCourses) {
+                  if (course.examDate && course.examTime) {
+                    events.push({
+                      id: course.id,
+                      title: course.name,
+                      start: course.examDate,
+                      extendedProps: { courseCode: course.code, time: course.examTime, courseId: course.id },
+                      backgroundColor: '#38BDF8',
+                      borderColor: '#6366F1'
+                    });
+                  }
+                }
+              } else {
+                const course = myCourses.find(c => c.id === courseId);
+                if (course && course.examDate && course.examTime) {
                   events.push({
                     id: course.id,
                     title: course.name,
@@ -1824,103 +1863,91 @@ async function initDateSheetView() {
                   });
                 }
               }
-            } else {
-              const course = myCourses.find(c => c.id === courseId);
-              if (course && course.examDate && course.examTime) {
-                events.push({
-                  id: course.id,
-                  title: course.name,
-                  start: course.examDate,
-                  extendedProps: { courseCode: course.code, time: course.examTime, courseId: course.id },
-                  backgroundColor: '#38BDF8',
-                  borderColor: '#6366F1'
-                });
-              }
             }
+            successCallback(events);
+          } catch (err) {
+            console.error("Calendar error:", err);
+            failureCallback(err);
           }
-          successCallback(events);
-        } catch (err) {
-          console.error("Calendar error:", err);
-          failureCallback(err);
-        }
-      },
-      select: function (info) {
-        if (user.role === 'teacher') {
-          const courseId = courseSelect.value;
-          if (courseId === 'all') {
-            alert("Please select a specific course to add an exam date.");
-            calendar.unselect();
-            return;
-          }
-          openModal("Schedule Exam", (body, close) => {
-            body.innerHTML = `
+        },
+        select: function (info) {
+          if (user.role === 'teacher') {
+            const courseId = courseSelect.value;
+            if (courseId === 'all') {
+              alert("Please select a specific course to add an exam date.");
+              calendar.unselect();
+              return;
+            }
+            openModal("Schedule Exam", (body, close) => {
+              body.innerHTML = `
               <label>Exam Date</label>
               <input type="date" id="exam-date-input" value="${info.startStr}">
               <label>Exam Time</label>
               <input type="time" id="exam-time-input" value="09:00">
             `;
-            return async () => {
-              const examDate = document.getElementById("exam-date-input").value;
-              const examTime = document.getElementById("exam-time-input").value;
-              if (!examDate || !examTime) { alert("Both required"); return; }
-              try {
-                await api(`/api/courses/${courseId}`, {
-                  method: "PUT",
-                  body: JSON.stringify({ examDate, examTime })
-                });
-                close();
-                calendar.refetchEvents();
-                alert("Exam scheduled!");
-              } catch (err) {
-                alert(err.message);
-              }
-            };
-          });
-          calendar.unselect();
-        }
-      },
-      eventClick: function (info) {
-        const event = info.event;
-        const props = event.extendedProps;
-        openModal("Exam Details", (body, close) => {
-          body.innerHTML = `
+              return async () => {
+                const examDate = document.getElementById("exam-date-input").value;
+                const examTime = document.getElementById("exam-time-input").value;
+                if (!examDate || !examTime) { alert("Both required"); return; }
+                try {
+                  await api(`/api/courses/${courseId}`, {
+                    method: "PUT",
+                    body: JSON.stringify({ examDate, examTime })
+                  });
+                  close();
+                  calendar.refetchEvents();
+                  alert("Exam scheduled!");
+                } catch (err) {
+                  alert(err.message);
+                }
+              };
+            });
+            calendar.unselect();
+          }
+        },
+        eventClick: function (info) {
+          const event = info.event;
+          const props = event.extendedProps;
+          openModal("Exam Details", (body, close) => {
+            body.innerHTML = `
             <h4 style="color: var(--accent-cyan);">${event.title}</h4>
             <p><strong>Date:</strong> ${new Date(event.start).toLocaleDateString()}</p>
             <p><strong>Time:</strong> ${props.time || 'Not set'}</p>
             <p><strong>Code:</strong> ${props.courseCode || 'N/A'}</p>
           `;
-          if (user.role === 'teacher') {
-            const delBtn = document.createElement("button");
-            delBtn.className = "btn-outline-small";
-            delBtn.style.cssText = "color:red; margin-top:10px;";
-            delBtn.textContent = "Remove";
-            delBtn.onclick = async () => {
-              if (confirm("Remove exam date?")) {
-                try {
-                  await api(`/api/courses/${props.courseId}`, {
-                    method: "PUT",
-                    body: JSON.stringify({ examDate: null, examTime: null })
-                  });
-                  close();
-                  calendar.refetchEvents();
-                  alert("Removed.");
-                } catch (err) {
-                  alert(err.message);
+            if (user.role === 'teacher') {
+              const delBtn = document.createElement("button");
+              delBtn.className = "btn-outline-small";
+              delBtn.style.cssText = "color:red; margin-top:10px;";
+              delBtn.textContent = "Remove";
+              delBtn.onclick = async () => {
+                if (confirm("Remove exam date?")) {
+                  try {
+                    await api(`/api/courses/${props.courseId}`, {
+                      method: "PUT",
+                      body: JSON.stringify({ examDate: null, examTime: null })
+                    });
+                    close();
+                    calendar.refetchEvents();
+                    alert("Removed.");
+                  } catch (err) {
+                    alert(err.message);
+                  }
                 }
-              }
-            };
-            body.appendChild(delBtn);
-          }
-          document.getElementById("modal-save").style.display = "none";
-          return () => { };
-        });
-      }
-    });
+              };
+              body.appendChild(delBtn);
+            }
+            document.getElementById("modal-save").style.display = "none";
+            return () => { };
+          });
+        }
+      });
 
-    calendar.render();
+      calendar.render();
+    }
 
     courseSelect.addEventListener("change", () => {
-      if (calendar) calendar.refetchEvents();
+      if (calendar && typeof calendar.refetchEvents === 'function') calendar.refetchEvents();
     });
   }
 
@@ -2030,7 +2057,7 @@ async function initDateSheetView() {
     try {
       await api(`/api/courses/${courseId}/datesheets/${dsId}`, { method: "DELETE" });
       alert("Date sheet deleted.");
-      initDateSheetsView();
+      initDateSheetView();
     } catch (err) {
       alert(err.message);
     }
