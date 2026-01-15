@@ -339,7 +339,9 @@ function initDashboardPage() {
     document.querySelectorAll(".teacher-only").forEach((el) => el.style.display = "none");
     document.getElementById("teacher-only-submissions").style.display = "none";
   } else {
-    document.getElementById("student-only-pending").style.display = "none";
+    // Check if element exists before hiding
+    const pendingEl = document.getElementById("student-only-completed");
+    if (pendingEl) pendingEl.style.display = "none";
   }
 
   logoutBtn.addEventListener("click", () => {
@@ -2307,6 +2309,23 @@ async function initScheduleView() {
     events: async (info, success, failure) => {
       try {
         const data = await api("/api/schedule");
+
+        // Empty State Handler
+        const container = document.getElementById("class-calendar");
+        if (data.length === 0) {
+          const info = document.createElement("div");
+          info.innerHTML = "<strong>Nothing uploaded yet properly</strong>";
+          info.style.position = "absolute";
+          info.style.top = "50%";
+          info.style.left = "50%";
+          info.style.transform = "translate(-50%, -50%)";
+          info.style.fontSize = "1.5rem";
+          info.style.color = "rgba(255,255,255,0.5)";
+          info.style.zIndex = "10";
+          info.style.fontWeight = "bold";
+          container.appendChild(info);
+        }
+
         const events = data.map(ev => ({
           title: ev.title,
           start: ev.start,
@@ -2384,16 +2403,21 @@ async function initBroadcastPortal() {
     try {
       const data = await api("/api/broadcasts");
       msgContainer.innerHTML = "";
-      data.forEach(m => {
-        const div = document.createElement("div");
-        div.className = "message" + (m.senderId === user.id ? " own" : "");
-        div.innerHTML = `
-          <div class="meta">${m.senderName} (${m.senderRole.toUpperCase()}) - ${new Date(m.createdAt).toLocaleString()}</div>
-          <div class="text" style="background: rgba(255,255,255,0.05); border-left: 3px solid #ff00ff;">${m.content}</div>
-        `;
-        msgContainer.appendChild(div);
-      });
-      msgContainer.scrollTop = msgContainer.scrollHeight;
+
+      if (data.length === 0) {
+        msgContainer.innerHTML = "<p class='hint' style='text-align:center; padding:20px;'>No messages...</p>";
+      } else {
+        data.forEach(m => {
+          const div = document.createElement("div");
+          div.className = "message" + (m.senderId === user.id ? " own" : "");
+          div.innerHTML = `
+            <div class="meta">${m.senderName} (${m.senderRole.toUpperCase()}) - ${new Date(m.createdAt).toLocaleString()}</div>
+            <div class="text" style="background: rgba(255,255,255,0.05); border-left: 3px solid #ff00ff;">${m.content}</div>
+          `;
+          msgContainer.appendChild(div);
+        });
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+      }
     } catch (e) { console.error(e); }
   }
 
