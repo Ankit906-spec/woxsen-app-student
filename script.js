@@ -483,6 +483,13 @@ async function loadDashboardSummary() {
         document.getElementById("stat-to-grade").style.color = "lightgreen";
       }
 
+      // Make clickable
+      document.getElementById("teacher-only-submissions").style.cursor = "pointer";
+      document.getElementById("teacher-only-submissions").onclick = () => {
+        const navBtn = document.querySelector(`.nav-btn[data-view="assignments"]`);
+        if (navBtn) navBtn.click();
+      };
+
       // Add Subject Boards button for teachers
       const overviewExtra = document.getElementById("overview-extra");
       if (overviewExtra) {
@@ -872,42 +879,54 @@ function renderAssignments() {
   const mainWrapper = document.createElement("div");
   mainWrapper.style.width = "100%";
 
-  // Pending Box
-  const pendingBox = document.createElement("div");
-  pendingBox.className = "assignment-section-box";
-  pendingBox.innerHTML = `<h3 style="font-size: 1.5rem; color: orange; margin-bottom: 1rem;">Pending Assignments</h3>`;
-  const pendingGrid = document.createElement("div");
-  pendingGrid.className = "grid";
-
-  if (pendingList.length === 0) {
-    pendingGrid.innerHTML = "<p class='hint' style='font-size: 1.1rem; padding: 1rem;'>Excellent! No pending assignments.</p>";
-  } else {
-    pendingList.forEach(a => {
+  if (user.role === "teacher") {
+    // TEACHER VIEW: Simple list
+    const teacherGrid = document.createElement("div");
+    teacherGrid.className = "grid";
+    cachedAssignments.forEach(a => {
       const card = createAssignmentCard(a, user, false);
-      pendingGrid.appendChild(card);
+      teacherGrid.appendChild(card);
     });
-  }
-  pendingBox.appendChild(pendingGrid);
-  mainWrapper.appendChild(pendingBox);
-
-  // Submitted Box
-  const submittedBox = document.createElement("div");
-  submittedBox.className = "assignment-section-box";
-  submittedBox.style.marginTop = "2rem";
-  submittedBox.innerHTML = `<h3 style="font-size: 1.5rem; color: #22c55e; margin-bottom: 1rem;">Submitted Assignments</h3>`;
-  const submittedGrid = document.createElement("div");
-  submittedGrid.className = "grid";
-
-  if (submittedList.length === 0) {
-    submittedGrid.innerHTML = "<p class='hint' style='font-size: 1.1rem; padding: 1rem;'>You haven't submitted any assignments yet.</p>";
+    mainWrapper.appendChild(teacherGrid);
   } else {
-    submittedList.forEach(a => {
-      const card = createAssignmentCard(a, user, true);
-      submittedGrid.appendChild(card);
-    });
+    // STUDENT VIEW: Pending vs Submitted
+    // Pending Box
+    const pendingBox = document.createElement("div");
+    pendingBox.className = "assignment-section-box";
+    pendingBox.innerHTML = `<h3 style="font-size: 1.5rem; color: orange; margin-bottom: 1rem;">Pending Assignments</h3>`;
+    const pendingGrid = document.createElement("div");
+    pendingGrid.className = "grid";
+
+    if (pendingList.length === 0) {
+      pendingGrid.innerHTML = "<p class='hint' style='font-size: 1.1rem; padding: 1rem;'>Excellent! No pending assignments.</p>";
+    } else {
+      pendingList.forEach(a => {
+        const card = createAssignmentCard(a, user, false);
+        pendingGrid.appendChild(card);
+      });
+    }
+    pendingBox.appendChild(pendingGrid);
+    mainWrapper.appendChild(pendingBox);
+
+    // Submitted Box
+    const submittedBox = document.createElement("div");
+    submittedBox.className = "assignment-section-box";
+    submittedBox.style.marginTop = "2rem";
+    submittedBox.innerHTML = `<h3 style="font-size: 1.5rem; color: #22c55e; margin-bottom: 1rem;">Submitted Assignments</h3>`;
+    const submittedGrid = document.createElement("div");
+    submittedGrid.className = "grid";
+
+    if (submittedList.length === 0) {
+      submittedGrid.innerHTML = "<p class='hint' style='font-size: 1.1rem; padding: 1rem;'>You haven't submitted any assignments yet.</p>";
+    } else {
+      submittedList.forEach(a => {
+        const card = createAssignmentCard(a, user, true);
+        submittedGrid.appendChild(card);
+      });
+    }
+    submittedBox.appendChild(submittedGrid);
+    mainWrapper.appendChild(submittedBox);
   }
-  submittedBox.appendChild(submittedGrid);
-  mainWrapper.appendChild(submittedBox);
 
   container.appendChild(mainWrapper);
 }
@@ -2249,7 +2268,7 @@ async function initScheduleView() {
   if (!container) return;
 
   // Role check for Add Event button
-  if (["hod", "coordinator", "admin"].includes(user.role)) {
+  if (["teacher", "hod", "coordinator", "admin"].includes(user.role)) {
     if (addBtn) {
       addBtn.style.display = "inline-block";
       addBtn.onclick = () => {
