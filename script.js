@@ -1657,19 +1657,20 @@ async function initMaterialsView() {
           <div style="margin-bottom:1rem;">
             <label>Type</label>
             <select id="material-type">
-              <option value="file">File (PDF, PPT, Word)</option>
-              <option value="video">Video URL (YouTube, etc.)</option>
+              <option value="file">File (PDF, Word, Excel, PPT, Images)</option>
+              <option value="video">Video Link (YouTube, Vimeo, etc.)</option>
             </select>
           </div>
           <div id="file-input-group">
             <label>Select file(s)</label>
-            <input type="file" id="materialFiles" multiple>
+            <input type="file" id="materialFiles" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png">
+            <p class="hint">Supported: PDF, Word, Excel, PPT, Images</p>
           </div>
           <div id="video-input-group" class="hidden">
             <label>Video Title</label>
-            <input type="text" id="video-title" placeholder="Introduction to AI">
-            <label>URL</label>
-            <input type="text" id="video-url" placeholder="https://...">
+            <input type="text" id="video-title" placeholder="e.g. Introduction to AI">
+            <label>Video URL</label>
+            <input type="text" id="video-url" placeholder="https://youtube.com/...">
           </div>
         `;
 
